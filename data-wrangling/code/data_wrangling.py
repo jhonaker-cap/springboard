@@ -34,10 +34,13 @@ def log_time(msg):
     A short function to measure execution time of various steps
     """
     logger.log_text(f"@@@@ {msg} {datetime.now()}")
+    print(f"@@@@ {msg} {datetime.now()}")
 
 
 RAW_DATA = sys.argv[1]
 TOKENIZED_DATA_DIR = sys.argv[2]
+CLEAN_DATA_FILENAME = sys.argv[3]
+THRESHOLD = int(sys.argv[4])
 
 log_time("Begin processing")
 
@@ -394,7 +397,7 @@ log_time("Split data")
 # it also saved on memory required for processing.
 raw_data_sdf = clean_df
 raw_data_sdf.printSchema()
-raw_data_split_sdf = raw_data_sdf.randomSplit([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+raw_data_split_sdf = raw_data_sdf.randomSplit([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], seed=42)
 
 gcs = storage.Client()
 iteration = 0
@@ -404,6 +407,7 @@ for df in raw_data_split_sdf:
         # save the domains with their canonical ids.  This only works with large enough data sets
         # such that it has all domains that will be used.  We only do this the first time through.
         domains = get_source_domains(df)
+        
         domains_bc = sc.broadcast(domains)
         domain_lookup = pd.Series(domains)
         store = pd.HDFStore('domain_lookup.h5')
@@ -416,7 +420,11 @@ for df in raw_data_split_sdf:
 
     clean_sdf = process_data(df, bert_layer)
     clean_data_pdf = clean_sdf.toPandas()
+    print("SHAPE OF clean_data_pdf", clean_data_pdf.shape)
     log_time("Begin store")
+    clean_data_pdf.to_json(f"{CLEAN_DATA_FILENAME}_{iteration}.json",
+                           indent=2,
+                           orient='index')
     filename = f"tokens_{iteration}.h5"
     store = pd.HDFStore(filename)
     store['clean_data'] = clean_data_pdf
